@@ -1,0 +1,63 @@
+// ====== DISCOVERY & LOGS → LOKI (on Pi) ======
+discovery.docker "local" {
+  host = "unix:///Users/yuanhuang/.docker/run/docker.sock"
+}
+
+loki.source.docker "containers" {
+  labels = {
+    host = "yuan-mini",
+  }
+
+  host = "unix:///Users/yuanhuang/.docker/run/docker.sock"
+  targets = discovery.docker.local.targets
+  // by default tails Docker JSON logs; includes metadata
+  // optional: drop noisy fields or add labels here
+
+  forward_to = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+  forward_to = [loki.write.to_pi.receiver]
+
+  stage.match {
+    selector = "{docker_healthcheck=\"true\"}"
+    action   = "drop"
+  }
+
+  stage.docker {}
+}
+
+loki.write "to_pi" {
+  // endpoint { url = "http://raspberrypi4.local:3100/loki/api/v1/push" } 
+  endpoint { url = "http://192.168.1.98:3100/loki/api/v1/push" }
+  // optional: configure batch/timeouts with a nested `batch { ... }` block if needed
+}
+
+// ====== TRACES → TEMPO (on Pi) ======
+// otelcol.receiver.otlp "ingest" {
+//   grpc { endpoint = "0.0.0.0:4317" }
+//   http { endpoint = "0.0.0.0:4318" }
+// }
+//
+// otelcol.exporter.otlp "to_tempo" {
+//   client {
+//     endpoint = "raspberrypi4.local:4317"  
+//     tls { insecure = true }
+//   }
+// }
+//
+// otelcol.processor.batch "batch" {}
+//
+// otelcol.service "traces" {
+//   pipelines {
+//     traces {
+//       receivers  = [otelcol.receiver.otlp.ingest]
+//       processors = [otelcol.processor.batch.batch]
+//       exporters  = [otelcol.exporter.otlp.to_tempo]
+//     }
+//   }
+// }
+
+// ====== SELF-METRICS (optional) ======
+// Alloy exposes Prometheus metrics on :12345 by default.
+// You can have Pi Prometheus scrape MAC_IP:12345 if you want.

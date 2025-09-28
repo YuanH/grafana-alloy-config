@@ -1,7 +1,11 @@
+
+
 // ====== DISCOVERY & LOGS → LOKI (on Pi) ======
 discovery.docker "local" {
   host = "unix:///Users/yuanhuang/.docker/run/docker.sock"
 }
+
+
 
 loki.source.docker "containers" {
   labels = {

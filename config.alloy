@@ -5,6 +5,20 @@ discovery.docker "local" {
   host = "unix:///Users/yuanhuang/.docker/run/docker.sock"
 }
 
+discovery.relabel "logs_integrations_docker" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex = "/(.*)"
+    target_label = "container_name"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement = constants.hostname
+  }
+}
 
 
 loki.source.docker "containers" {
@@ -14,15 +28,12 @@ loki.source.docker "containers" {
 
   host = "unix:///Users/yuanhuang/.docker/run/docker.sock"
   targets = discovery.docker.local.targets
-  // by default tails Docker JSON logs; includes metadata
-  // optional: drop noisy fields or add labels here
-
+  relabel_rules = discovery.relabel.logs_integrations_docker.rules
   forward_to = [loki.process.containers.receiver]
 }
 
 loki.process "containers" {
   forward_to = [loki.write.to_pi.receiver]
-
   stage.match {
     selector = "{docker_healthcheck=\"true\"}"
     action   = "drop"
@@ -32,7 +43,6 @@ loki.process "containers" {
 }
 
 loki.write "to_pi" {
-  // endpoint { url = "http://raspberrypi4.local:3100/loki/api/v1/push" } 
   endpoint { url = "http://192.168.1.98:3100/loki/api/v1/push" }
   // optional: configure batch/timeouts with a nested `batch { ... }` block if needed
 }

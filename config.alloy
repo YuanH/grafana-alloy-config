@@ -47,30 +47,44 @@ loki.write "to_pi" {
   // optional: configure batch/timeouts with a nested `batch { ... }` block if needed
 }
 
+prometheus.exporter.unix "node_exporter" {
+  disable_collectors = ["thermal"]
+}
+
+prometheus.remote_write "metrics_to_pi" {
+  endpoint {
+    url = "http://192.168.1.98:9090/api/v1/write"
+  }
+}
+
+prometheus.scrape "node_metrics" {
+  targets = prometheus.exporter.unix.node_exporter.targets
+  forward_to = [prometheus.remote_write.metrics_to_pi.receiver]
+  job_name = "yuan-mini-node-exporter-host"
+  scrape_interval = "15s"
+}
+
 // ====== TRACES → TEMPO (on Pi) ======
-// otelcol.receiver.otlp "ingest" {
-//   grpc { endpoint = "0.0.0.0:4317" }
-//   http { endpoint = "0.0.0.0:4318" }
-// }
-//
-// otelcol.exporter.otlp "to_tempo" {
-//   client {
-//     endpoint = "raspberrypi4.local:4317"  
-//     tls { insecure = true }
-//   }
-// }
-//
-// otelcol.processor.batch "batch" {}
-//
-// otelcol.service "traces" {
-//   pipelines {
-//     traces {
-//       receivers  = [otelcol.receiver.otlp.ingest]
-//       processors = [otelcol.processor.batch.batch]
-//       exporters  = [otelcol.exporter.otlp.to_tempo]
-//     }
-//   }
-// }
+otelcol.receiver.otlp "ingest" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  output {
+    traces = [otelcol.processor.batch.batch.input]
+  }
+}
+
+otelcol.exporter.otlp "to_tempo" {
+  client {
+    endpoint = "http://192.168.1.98:4317"
+  }
+}
+
+otelcol.processor.batch "batch" {
+  output {
+    traces = [otelcol.exporter.otlp.to_tempo.input]
+  }
+}
 
 // ====== SELF-METRICS (optional) ======
 // Alloy exposes Prometheus metrics on :12345 by default.
